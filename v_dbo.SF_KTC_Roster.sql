@@ -1,9 +1,54 @@
---CREATE OR ALTER VIEW alumni.ktc_roster AS
+CREATE OR ALTER VIEW dbo.SF_KTC_Roster AS
 
-SELECT *
+SELECT sub.salesforce_contact_id
+      ,sub.school_specific_id
+      ,sub.first_name
+      ,sub.last_name
+      ,sub.ktc_status
+      ,sub.kipp_region_name
+      ,sub.currently_enrolled_school
+      ,sub.kipp_hs_class
+      ,sub.record_type_name
+      ,sub.current_kipp_student
+      ,sub.post_hs_simple_admin
+      ,sub.counselor_sf_id
+      ,sub.counselor_name
+      ,sub.gender
+      ,sub.ethnicity
+      ,sub.mobile_phone
+      ,sub.home_phone
+      ,sub.other_phone
+      ,sub.email
+      ,sub.terminal_school_name
+      ,sub.terminal_grade_level
+      ,sub.middle_school_attended
+      ,sub.high_school_graduated_from
+      ,sub.college_graduated_from
+      ,sub.is_kipp_ms_graduate
+      ,sub.is_kipp_hs_graduate
+      ,sub.expected_hs_graduation_date
+      ,sub.actual_hs_graduation_date
+      ,sub.college_status
+      ,sub.cumulative_gpa
+      ,sub.current_college_semester_gpa
+      ,sub.college_credits_attempted
+      ,sub.accumulated_credits_college
+      ,sub.expected_college_graduation_date
+      ,sub.actual_college_graduation_date
+      ,sub.latest_transcript_date
+      ,sub.is_informed_consent
+      ,sub.is_transcript_release
+      ,sub.highest_act_score
+      ,sub.college_match_display_gpa
+      ,sub.latest_resume_date
+      ,sub.latest_fafsa_date
+      ,sub.latest_state_financial_aid_app_date
+      ,sub.last_outreach_date
+      ,sub.last_successful_contact_date
+      ,sub.last_successful_advisor_contact_date
 FROM
     (
-     SELECT c.id AS sf_contact_id
+     SELECT c.id AS salesforce_contact_id
            ,c.School_Specific_ID__c AS school_specific_id
            ,c.FirstName AS first_name
            ,c.LastName AS last_name
@@ -13,7 +58,6 @@ FROM
            ,c.Current_KIPP_Student__c AS current_kipp_student
            ,c.Post_HS_Simple_Admin__c AS post_hs_simple_admin
            ,c.Currently_Enrolled_School__c AS currently_enrolled_school
-           ,COALESCE(c.High_School_Graduated_From__c, c.Middle_School_Attended__c) AS terminal_school_name
            ,c.College_Status__c AS college_status
            ,c.Middle_School_Attended__c AS middle_school_attended
            ,c.High_School_Graduated_From__c AS high_school_graduated_from
@@ -44,10 +88,7 @@ FROM
            ,c.Last_Outreach__c AS last_outreach_date
            ,c.Last_Successful_Contact__c AS last_successful_contact_date
            ,c.Last_Successful_Advisor_Contact__c AS last_successful_advisor_contact_date
-           --,co.exitdate AS exit_date
-           --,co.exitcode AS exit_code
-           --,(gabby.utilities.GLOBAL_ACADEMIC_YEAR() - co.academic_year) + co.grade_level AS current_grade_level_projection
-           --,(gabby.utilities.GLOBAL_ACADEMIC_YEAR() + 1) - DATEPART(YEAR, c.actual_hs_graduation_date_c) AS years_out_of_hs
+           ,COALESCE(c.High_School_Graduated_From__c, c.Middle_School_Attended__c) AS terminal_school_name
 
            ,a.[Name] AS kipp_region_name
            
@@ -59,8 +100,8 @@ FROM
            ,CASE
              WHEN c.KIPP_HS_Graduate__c = 1 THEN 'HSG'
              WHEN rt.[Name] = 'HS Student' AND c.Current_KIPP_Student__c = 'Current KIPP Student' THEN CONCAT('HS', c.Grade_Level__c)
-             WHEN rt.[Name] = 'HS Student' AND c.KIPP_MS_Graduate__c = 1 AND c.KIPP_HS_Graduate__c = 0 THEN 'TAFHS'
-             WHEN rt.[Name] IN ('College Student', 'Post-Education') AND c.KIPP_MS_Graduate__c = 1 AND c.KIPP_HS_Graduate__c = 0 THEN 'TAF'
+             WHEN rt.[Name] = 'HS Student' AND c.Current_KIPP_Student__c = 'Not Enrolled at a KIPP School' AND c.KIPP_MS_Graduate__c = 1 THEN 'TAFHS'
+             WHEN rt.[Name] IN ('College Student', 'Post-Education') AND c.KIPP_MS_Graduate__c = 1 THEN 'TAF'
             END AS ktc_status
      FROM KTX_Analytics.dbo.SF_Contact c
      JOIN KTX_Analytics.dbo.SF_RecordType rt

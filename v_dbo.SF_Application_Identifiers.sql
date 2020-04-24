@@ -1,9 +1,6 @@
-USE gabby
-GO
+CREATE OR ALTER VIEW dbo.SF_Application_Identifiers AS
 
-CREATE OR ALTER VIEW alumni.application_identifiers AS
-
-SELECT sub.sf_contact_id
+SELECT sub.salesforce_contact_id
       ,sub.application_id
       ,sub.match_type
       ,sub.application_admission_type
@@ -38,43 +35,39 @@ SELECT sub.sf_contact_id
       ,CASE WHEN sub.honors_special_program_name = 'EOF' AND sub.honors_special_program_status = 'Accepted' THEN 1 ELSE 0 END AS is_eof_accepted
 FROM
     (
-     SELECT app.applicant_c AS sf_contact_id
-           ,app.id AS application_id
-           ,app.match_type_c AS match_type
-           ,app.application_admission_type_c AS application_admission_type
-           ,app.application_submission_status_c AS application_submission_status
-           ,COALESCE(app.starting_application_status_c, app.application_status_c) AS starting_application_status
-           ,app.application_status_c AS application_status
-           ,app.honors_special_program_name_c AS honors_special_program_name
-           ,app.honors_special_program_status_c AS honors_special_program_status
-           ,app.matriculation_decision_c AS matriculation_decision
-           ,app.primary_reason_for_not_attending_c AS primary_reason_for_not_attending
-           ,app.financial_aid_eligibility_c AS financial_aid_eligibility
-           ,app.unmet_need_c AS unmet_need
-           ,app.efc_from_fafsa_c AS efc_from_fafsa
-           ,app.transfer_application_c AS transfer_application
-           ,app.created_date
-           ,app.type_for_roll_ups_c AS type_for_roll_ups
+     SELECT app.Applicant__c AS salesforce_contact_id
+           ,app.Id AS application_id
+           ,app.Match_Type__c AS match_type
+           ,app.Application_Admission_Type__c AS application_admission_type
+           ,NULL AS application_submission_status
+           ,COALESCE(app.Starting_Application_Status__c, app.Application_Status__c) AS starting_application_status
+           ,app.Application_Status__c AS application_status
+           ,app.Honors_Special_Program_Name__c AS honors_special_program_name
+           ,app.Honors_Special_Program_Status__c AS honors_special_program_status
+           ,NULL AS matriculation_decision
+           ,app.Primary_reason_for_not_attending__c AS primary_reason_for_not_attending
+           ,app.Financial_Aid_Eligibility__c AS financial_aid_eligibility
+           ,app.Unmet_Need__c AS unmet_need
+           ,app.EFC_from_FAFSA__c AS efc_from_fafsa
+           ,app.Transfer_Application__c AS transfer_application
+           ,app.CreatedDate AS created_date
+           ,NULL AS type_for_roll_ups
 
-           ,acc.[name] AS application_name
-           ,acc.[type] AS application_account_type
+           ,acc.[Name] AS application_name
+           ,acc.[Type] AS application_account_type
 
-           ,enr.status_c AS application_enrollment_status
-           ,enr.pursuing_degree_type_c AS application_pursuing_degree_type
-
-           --,ROW_NUMBER() OVER(
-           --   PARTITION BY app.applicant_c, app.matriculation_decision_c, app.transfer_application_c
-           --     ORDER BY enr.start_date_c) AS rn
-     FROM gabby.alumni.application_c app
-     JOIN gabby.alumni.account acc
-       ON app.school_c = acc.id
-      AND acc.is_deleted = 0
-     JOIN gabby.alumni.contact c
-       ON app.applicant_c = c.id
-     LEFT JOIN gabby.alumni.enrollment_c enr
-       ON app.applicant_c = enr.student_c
-      AND app.school_c = enr.school_c
-      AND c.kipp_hs_class_c = YEAR(enr.start_date_c)
-      AND enr.is_deleted = 0
-     WHERE app.is_deleted = 0
+           ,enr.Status__c AS application_enrollment_status
+           ,enr.Pursuing_Degree_Type__c AS application_pursuing_degree_type
+     FROM dbo.SF_Application_C app
+     JOIN dbo.SF_Account acc
+       ON app.School__c = acc.id
+      AND acc.IsDeleted = 0
+     JOIN dbo.SF_Contact c
+       ON app.Applicant__c = c.id
+     LEFT JOIN dbo.SF_Enrollment_C enr
+       ON app.Applicant__c = enr.Student__c
+      AND app.School__c = enr.School__c
+      AND c.KIPP_HS_Class__c = YEAR(enr.Start_Date__c)
+      AND enr.IsDeleted = 0
+     WHERE app.IsDeleted = 0
     ) sub
