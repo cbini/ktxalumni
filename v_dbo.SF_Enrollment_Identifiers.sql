@@ -19,7 +19,7 @@ WITH enrollments AS (
                   ORDER BY sub.enrollment_start_date ASC, sub.enrollment_actual_end_date ASC) AS rn_degree_asc
              ,ROW_NUMBER() OVER(
                 PARTITION BY sub.salesforce_contact_id, sub.pursuing_degree_level
-                  ORDER BY sub.enrollment_start_date DESC, sub.enrollment_actual_end_date DESC) AS rn_degree_desc
+                  ORDER BY sub.is_graduated DESC, sub.enrollment_start_date DESC, sub.enrollment_actual_end_date DESC) AS rn_degree_desc
              ,ROW_NUMBER() OVER(
                 PARTITION BY sub.salesforce_contact_id
                   ORDER BY sub.enrollment_start_date DESC, sub.enrollment_actual_end_date DESC) AS rn_current
@@ -29,6 +29,7 @@ WITH enrollments AS (
                   ,e.Id AS enrollment_id
                   ,e.Start_Date__c AS enrollment_start_date
                   ,COALESCE(e.Actual_End_Date__c, CONVERT(DATE, GETDATE())) AS enrollment_actual_end_date
+                  ,CASE WHEN e.Status__c = 'Graduated' THEN 1 ELSE 0 END AS is_graduated
                   ,CASE
                     WHEN e.Pursuing_Degree_Type__c IN ('Bachelor''s (4-year)', 'Associate''s (2 year)') THEN 'College'
                     WHEN e.Pursuing_Degree_Type__c IN ('Master''s', 'MBA') THEN 'Graduate'
