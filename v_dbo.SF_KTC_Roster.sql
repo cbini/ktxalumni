@@ -1,5 +1,66 @@
 CREATE OR ALTER VIEW dbo.SF_KTC_Roster AS
 
+WITH school_identifiers AS (
+  SELECT school_id
+        ,LEFT(region, 1) AS region_initial
+        ,CASE 
+          WHEN school = 'KIPP Northeast College Prep' THEN 'KIPP Northeast College Preparatory' 
+          WHEN school = 'KIPP Austin Brave' THEN 'KIPP Austin Brave High School'
+          WHEN school = 'KIPP Connect High School' THEN 'KIPP CONNECT Houston High School'
+          ELSE school 
+         END AS school
+  FROM ktx_analytics.dbo.school_names_table
+  WHERE academic_year = (SELECT MAX([year]) AS max_year
+                         FROM ktx_analytics.dbo.flat_region_year_dates
+                         WHERE SYSDATETIME() BETWEEN [start_date] AND end_date)
+ )
+
+,enrollments AS (
+  SELECT enr.student__c AS salesforce_contact_id
+        ,ROW_NUMBER() OVER(
+           PARTITION BY enr.student__c 
+             ORDER BY COALESCE(enr.actual_end_date__c, SYSDATETIME()) DESC) AS rn_enr
+
+        ,a.[name] AS school_name
+
+        ,sch.region_initial
+        ,sch.school_id
+  FROM ktx_analytics.dbo.sf_enrollment_c enr
+  JOIN ktx_analytics.dbo.sf_account a
+    ON enr.school__c = a.id
+   AND a.billingstate = 'TX'
+  LEFT JOIN school_identifiers sch
+    ON a.[name] = sch.school
+  WHERE enr.account_type__c = 'KIPP High School'
+    AND enr.status__c <> 'Did Not Enroll'
+    AND enr.isdeleted = 0
+ )
+
+/*,student_roster AS (
+  SELECT sub.salesforce_contact_id
+        ,sub.school_id
+           + sub.school_specific_id_clean
+           + sub.region_initial
+             AS nsc_unique_identifier
+  FROM
+      (
+       SELECT sf.salesforce_contact_id
+             ,CASE
+               WHEN sf.school_specific_id IS NULL THEN NULL
+               ELSE RIGHT(CONCAT('000000', sf.school_specific_id), 6) 
+              END AS school_specific_id_clean
+
+             ,sch.school_id
+             ,sch.region_initial
+       FROM ktx_analytics.dbo.sf_ktc_roster sf
+       JOIN enrollments enr
+         ON sf.salesforce_contact_id = enr.salesforce_contact_id
+        AND enr.rn_enr = 1
+       LEFT JOIN school_identifiers sch
+         ON enr.school_name = sch.school
+      ) sub
+ )*/
+
 SELECT sub.salesforce_contact_id
       ,sub.school_specific_id
       ,sub.first_name
@@ -46,71 +107,84 @@ SELECT sub.salesforce_contact_id
       ,sub.last_outreach_date
       ,sub.last_successful_contact_date
       ,sub.last_successful_advisor_contact_date
+      ,sub.school_id
+           + sub.school_specific_id_clean
+           + sub.region_initial
+               AS nsc_unique_identifier
 FROM
     (
      SELECT c.id AS salesforce_contact_id
-           ,c.School_Specific_ID__c AS school_specific_id
-           ,c.FirstName AS first_name
-           ,c.LastName AS last_name
-           ,c.Gender__c AS gender
-           ,c.Ethnicity__c AS ethnicity
-           ,c.KIPP_HS_Class__c AS kipp_hs_class
-           ,c.Current_KIPP_Student__c AS current_kipp_student
-           ,c.Post_HS_Simple_Admin__c AS post_hs_simple_admin
-           ,c.Currently_Enrolled_School__c AS currently_enrolled_school
-           ,c.College_Status__c AS college_status
-           ,c.Middle_School_Attended__c AS middle_school_attended
-           ,c.High_School_Graduated_From__c AS high_school_graduated_from
-           ,c.College_Graduated_From__c AS college_graduated_from
-           ,c.Grade_Level__c AS terminal_grade_level
-           ,c.KIPP_MS_Graduate__c AS is_kipp_ms_graduate
-           ,c.KIPP_HS_Graduate__c AS is_kipp_hs_graduate
-           ,c.Expected_HS_Graduation__c AS expected_hs_graduation_date
-           ,c.Actual_HS_Graduation_Date__c AS actual_hs_graduation_date
-           ,c.Expected_College_Graduation__c AS expected_college_graduation_date
-           ,c.Actual_College_Graduation_Date__c AS actual_college_graduation_date
-           ,c.Informed_Consent__c AS is_informed_consent
-           ,c.Transcript_Release__c AS is_transcript_release
-           ,c.Latest_Transcript__c AS latest_transcript_date
-           ,c.Latest_FAFSA_Date__c AS latest_fafsa_date
-           ,c.Latest_State_Financial_Aid_App_Date__c AS latest_state_financial_aid_app_date
-           ,c.Cumulative_GPA__c AS cumulative_gpa
-           ,c.Current_College_Semester_GPA__c AS current_college_semester_gpa
-           ,c.College_Match_Display_GPA__c AS college_match_display_gpa
-           ,c.Highest_ACT_Score__c AS highest_act_score
-           ,c.College_Credits_Attempted__c AS college_credits_attempted
-           ,c.Accumulated_Credits_College__c AS accumulated_credits_college
-           ,c.MobilePhone AS mobile_phone
-           ,c.HomePhone AS home_phone
-           ,c.OtherPhone AS other_phone
-           ,c.Email AS email
-           ,c.Latest_Resume__c AS latest_resume_date
-           ,c.Last_Outreach__c AS last_outreach_date
-           ,c.Last_Successful_Contact__c AS last_successful_contact_date
-           ,c.Last_Successful_Advisor_Contact__c AS last_successful_advisor_contact_date
-           ,COALESCE(c.High_School_Graduated_From__c, c.Middle_School_Attended__c) AS terminal_school_name
+           ,c.school_specific_id__c AS school_specific_id
+           ,c.firstname AS first_name
+           ,c.lastname AS last_name
+           ,c.gender__c AS gender
+           ,c.ethnicity__c AS ethnicity
+           ,c.kipp_hs_class__c AS kipp_hs_class
+           ,c.current_kipp_student__c AS current_kipp_student
+           ,c.post_hs_simple_admin__c AS post_hs_simple_admin
+           ,c.currently_enrolled_school__c AS currently_enrolled_school
+           ,c.college_status__c AS college_status
+           ,c.middle_school_attended__c AS middle_school_attended
+           ,c.high_school_graduated_from__c AS high_school_graduated_from
+           ,c.college_graduated_from__c AS college_graduated_from
+           ,c.grade_level__c AS terminal_grade_level
+           ,c.kipp_ms_graduate__c AS is_kipp_ms_graduate
+           ,c.kipp_hs_graduate__c AS is_kipp_hs_graduate
+           ,c.expected_hs_graduation__c AS expected_hs_graduation_date
+           ,c.actual_hs_graduation_date__c AS actual_hs_graduation_date
+           ,c.expected_college_graduation__c AS expected_college_graduation_date
+           ,c.actual_college_graduation_date__c AS actual_college_graduation_date
+           ,c.informed_consent__c AS is_informed_consent
+           ,c.transcript_release__c AS is_transcript_release
+           ,c.latest_transcript__c AS latest_transcript_date
+           ,c.latest_fafsa_date__c AS latest_fafsa_date
+           ,c.latest_state_financial_aid_app_date__c AS latest_state_financial_aid_app_date
+           ,c.cumulative_gpa__c AS cumulative_gpa
+           ,c.current_college_semester_gpa__c AS current_college_semester_gpa
+           ,c.college_match_display_gpa__c AS college_match_display_gpa
+           ,c.highest_act_score__c AS highest_act_score
+           ,c.college_credits_attempted__c AS college_credits_attempted
+           ,c.accumulated_credits_college__c AS accumulated_credits_college
+           ,c.mobilephone AS mobile_phone
+           ,c.homephone AS home_phone
+           ,c.otherphone AS other_phone
+           ,c.email AS email
+           ,c.latest_resume__c AS latest_resume_date
+           ,c.last_outreach__c AS last_outreach_date
+           ,c.last_successful_contact__c AS last_successful_contact_date
+           ,c.last_successful_advisor_contact__c AS last_successful_advisor_contact_date
+           ,COALESCE(c.high_school_graduated_from__c, c.middle_school_attended__c) AS terminal_school_name
+           ,CASE
+             WHEN c.school_specific_id__c IS NULL THEN NULL
+             ELSE RIGHT(CONCAT('000000', c.school_specific_id__c), 6) 
+            END AS school_specific_id_clean
 
-           ,a.[Name] AS kipp_region_name
+           ,a.[name] AS kipp_region_name
            
-           ,rt.[Name] AS record_type_name
+           ,rt.[name] AS record_type_name
 
            ,u.id AS counselor_sf_id
            ,u.[name] AS counselor_name
 
+           ,enr.region_initial
+           ,enr.school_id
+
            ,CASE
-             WHEN c.KIPP_HS_Graduate__c = 1 THEN 'HSG'
-             WHEN rt.[Name] = 'HS Student' AND c.Current_KIPP_Student__c = 'Current KIPP Student' THEN CONCAT('HS', c.Grade_Level__c)
-             WHEN rt.[Name] = 'HS Student' AND c.Current_KIPP_Student__c = 'Not Enrolled at a KIPP School' AND c.KIPP_MS_Graduate__c = 1 THEN 'TAFHS'
-             WHEN rt.[Name] IN ('College Student', 'Post-Education') AND c.KIPP_MS_Graduate__c = 1 THEN 'TAF'
+             WHEN c.kipp_hs_graduate__c = 1 THEN 'HSG'
+             WHEN rt.[name] = 'HS Student' AND c.current_kipp_student__c = 'Current KIPP Student' THEN CONCAT('HS', c.grade_level__c)
+             WHEN rt.[name] = 'HS Student' AND c.current_kipp_student__c = 'Not Enrolled at a KIPP School' AND c.kipp_ms_graduate__c = 1 THEN 'TAFHS'
+             WHEN rt.[name] IN ('College Student', 'Post-Education') AND c.kipp_ms_graduate__c = 1 THEN 'TAF'
             END AS ktc_status
-     FROM KTX_Analytics.dbo.SF_Contact c
-     JOIN KTX_Analytics.dbo.SF_RecordType rt
-       ON c.RecordTypeId = rt.id
-      AND rt.[Name] IN ('College Student', 'HS Student', 'MS Student', 'Post-Education')
-     JOIN KTX_Analytics.dbo.SF_Account a
-       ON c.KIPP_Region_School__c = a.Id
-     LEFT JOIN KTX_Analytics.dbo.SF_User u
-       ON c.OwnerId = u.id
-     WHERE c.IsDeleted = 0
+     FROM KTX_Analytics.dbo.sf_contact c
+     JOIN KTX_Analytics.dbo.sf_recordtype rt
+       ON c.recordtypeid = rt.id
+      AND rt.[name] IN ('College Student', 'HS Student', 'MS Student', 'Post-Education')
+     JOIN ktx_analytics.dbo.sf_account a
+       ON c.kipp_region_school__c = a.id
+     LEFT JOIN ktx_analytics.dbo.sf_user u
+       ON c.ownerid = u.id
+     LEFT JOIN enrollments enr
+       ON c.id = enr.salesforce_contact_id
+      AND enr.rn_enr = 1
+     WHERE c.isdeleted = 0
     ) sub
-WHERE sub.ktc_status IS NOT NULL
