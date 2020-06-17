@@ -12,7 +12,8 @@ WITH school_identifiers AS (
   FROM ktx_analytics.dbo.school_names_table
   WHERE academic_year = (SELECT MAX([year]) AS max_year
                          FROM ktx_analytics.dbo.flat_region_year_dates
-                         WHERE SYSDATETIME() BETWEEN [start_date] AND end_date)
+                         --WHERE SYSDATETIME() BETWEEN [start_date] AND end_date
+                         )
  )
 
 ,enrollments AS (
@@ -172,8 +173,8 @@ FROM
            ,CASE
              WHEN c.kipp_hs_graduate__c = 1 THEN 'HSG'
              WHEN rt.[name] = 'HS Student' AND c.current_kipp_student__c = 'Current KIPP Student' THEN CONCAT('HS', c.grade_level__c)
-             WHEN rt.[name] = 'HS Student' AND c.current_kipp_student__c = 'Not Enrolled at a KIPP School' AND c.kipp_ms_graduate__c = 1 THEN 'TAFHS'
-             WHEN rt.[name] IN ('College Student', 'Post-Education') AND c.kipp_ms_graduate__c = 1 THEN 'TAF'
+             WHEN rt.[name] = 'HS Student' AND c.current_kipp_student__c = 'Not Enrolled at a KIPP School' AND c.kipp_ms_graduate__c = 1 THEN 'KMSA'
+             WHEN rt.[name] IN ('College Student', 'Post-Education') AND c.kipp_ms_graduate__c = 1 THEN 'KMSA'
             END AS ktc_status
      FROM KTX_Analytics.dbo.sf_contact c
      JOIN KTX_Analytics.dbo.sf_recordtype rt
