@@ -19,7 +19,13 @@ WITH nsc_link AS (
         ,a.id AS salesforce_school_id
 
         ,r.salesforce_contact_id
+        ,r.kipp_region_name
+        ,r.counselor_name
         ,r.ktc_status
+
+        ,ROW_NUMBER() OVER(
+           PARTITION BY nsc.[unique]
+             ORDER BY nsc.[graduated], DATEFROMPARTS(RIGHT(nsc.[enrollment start], 4), LEFT(nsc.[enrollment start], 2), 1)) AS rn_enrollment_order
   FROM ktx_analytics.dbo.nsc_hs_grad_college_data nsc
   LEFT JOIN ktx_analytics.dbo.nsc_college_code_crosswalk cw
     ON nsc.[college code] = cw.nsc_college_code
@@ -40,18 +46,25 @@ WITH nsc_link AS (
         ,enr.account_type__c AS sf_account_type
         ,enr.pursuing_degree_type__c AS sf_pursuing_degree_type
         ,enr.major__c AS sf_major
-        ,enr.start_date__c AS sf_start_date
         ,enr.actual_end_date__c AS sf_actual_end_date
         ,enr.nsc_verified__c AS sf_nsc_verified
+        ,RIGHT(CONCAT('0', DATEPART(MONTH, enr.start_date__c)), 2) + '/'
+           + CONVERT(VARCHAR(4), DATEPART(YEAR, enr.start_date__c)) AS sf_start_date
         ,RIGHT(CONCAT('0', DATEPART(MONTH, enr.actual_end_date__c)), 2) + '/'
            + CONVERT(VARCHAR(4), DATEPART(YEAR, enr.actual_end_date__c)) AS sf_actual_end
 
         ,r.nsc_unique_identifier
         ,r.first_name AS sf_first_name
         ,r.last_name AS sf_last_name
+        ,r.counselor_name
+        ,r.kipp_region_name
         ,r.ktc_status
 
         ,a.[name] AS sf_school_name
+
+        ,ROW_NUMBER() OVER(
+           PARTITION BY enr.student__c
+             ORDER BY enr.start_date__c) AS rn_enrollment_order
   FROM ktx_analytics.dbo.sf_enrollment_c enr
   JOIN ktx_analytics.dbo.sf_ktc_roster r
     ON enr.student__c = r.salesforce_contact_id
@@ -65,18 +78,23 @@ WITH nsc_link AS (
 SELECT n.nsc_unique_identifier
       ,n.nsc_first_name AS student_first_name
       ,n.nsc_last_name AS student_last_name
+      ,n.counselor_name
+      ,n.kipp_region_name
       ,n.nsc_college_name AS college_name
 
+      ,n.salesforce_school_id AS nsc_school_id
       ,n.nsc_degree_title
       ,n.nsc_enrollment_start
       ,n.nsc_enrollment_end
 
+      ,e.salesforce_school_id AS enr_school_id
       ,e.sf_pursuing_degree_type
       ,e.sf_start_date
       ,e.sf_actual_end
       ,ISNULL(e.sf_nsc_verified, 0) AS sf_nsc_verified
 
       ,CASE WHEN e.sf_school_name IS NOT NULL THEN 1 ELSE 0 END AS is_record_match
+      ,'Graduated' AS enrollment_type
       ,'NSC>SF' AS direction
 FROM nsc_link n
 LEFT JOIN sf_enr e
@@ -90,18 +108,23 @@ UNION ALL
 SELECT e.nsc_unique_identifier
       ,e.sf_first_name AS student_first_name
       ,e.sf_last_name AS student_last_name
+      ,e.counselor_name
+      ,e.kipp_region_name
       ,e.sf_school_name AS college_name
 
+      ,n.salesforce_school_id AS nsc_school_id
       ,n.nsc_degree_title
       ,n.nsc_enrollment_start
       ,n.nsc_enrollment_end
 
+      ,e.salesforce_school_id AS enr_school_id
       ,e.sf_pursuing_degree_type
       ,e.sf_start_date
       ,e.sf_actual_end
       ,ISNULL(e.sf_nsc_verified, 0) AS sf_nsc_verified
 
       ,CASE WHEN n.nsc_college_name IS NOT NULL THEN 1 ELSE 0 END AS is_record_match
+      ,'Graduated' AS enrollment_type
       ,'SF>NSC' AS direction
 FROM sf_enr e
 LEFT JOIN nsc_link n
@@ -109,11 +132,70 @@ LEFT JOIN nsc_link n
  AND e.salesforce_school_id = n.salesforce_school_id
  AND n.nsc_graduated = 'Y'
  AND n.nsc_degree_title <> ''
-WHERE e.sf_status = 'Graduated'
-  AND e.nsc_unique_identifier IS NOT NULL
+WHERE e.nsc_unique_identifier IS NOT NULL
+  AND e.sf_status = 'Graduated'
+
+UNION ALL
 
 /* FIRST ENROLLMENT */
--- ...
+SELECT n.nsc_unique_identifier
+      ,n.nsc_first_name AS student_first_name
+      ,n.nsc_last_name AS student_last_name
+      ,n.counselor_name
+      ,n.kipp_region_name
+      ,n.nsc_college_name AS college_name
+      
+      ,n.salesforce_school_id AS nsc_school_id
+      ,n.nsc_degree_title
+      ,n.nsc_enrollment_start
+      ,n.nsc_enrollment_end
+
+      ,e.salesforce_school_id AS enr_school_id
+      ,e.sf_pursuing_degree_type
+      ,e.sf_start_date
+      ,e.sf_actual_end
+      ,ISNULL(e.sf_nsc_verified, 0) AS sf_nsc_verified
+
+      ,CASE WHEN e.sf_school_name IS NOT NULL THEN 1 ELSE 0 END AS is_record_match
+      ,'Matriculated' AS enrollment_type
+      ,'NSC>SF' AS direction
+FROM nsc_link n
+LEFT JOIN sf_enr e
+  ON n.salesforce_contact_id = e.salesforce_contact_id
+ AND e.rn_enrollment_order = 1
+WHERE n.nsc_graduated = 'N'
+  AND n.rn_enrollment_order = 1
+
+UNION ALL
+
+SELECT e.nsc_unique_identifier
+      ,e.sf_first_name AS student_first_name
+      ,e.sf_last_name AS student_last_name
+      ,e.counselor_name
+      ,e.kipp_region_name
+      ,e.sf_school_name AS college_name
+
+      ,n.salesforce_school_id AS nsc_school_id
+      ,n.nsc_degree_title
+      ,n.nsc_enrollment_start
+      ,n.nsc_enrollment_end
+
+      ,e.salesforce_school_id AS enr_school_id
+      ,e.sf_pursuing_degree_type
+      ,e.sf_start_date
+      ,e.sf_actual_end
+      ,ISNULL(e.sf_nsc_verified, 0) AS sf_nsc_verified
+
+      ,CASE WHEN n.nsc_college_name IS NOT NULL THEN 1 ELSE 0 END AS is_record_match
+      ,'Matriculated' AS enrollment_type
+      ,'SF>NSC' AS direction
+FROM sf_enr e
+LEFT JOIN nsc_link n
+  ON e.salesforce_contact_id = n.salesforce_contact_id
+ AND n.nsc_graduated = 'N'
+ AND n.rn_enrollment_order = 1
+WHERE e.nsc_unique_identifier IS NOT NULL
+  AND e.rn_enrollment_order = 1
 
 /*
 Questions:
